@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" output="impl/java/bin" path="impl/java/src"/>
+	<classpathentry exported="true" kind="con" path="com.ibm.streams.java/com.ibm.streams.operator"/>
+	<classpathentry exported="true" kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry kind="src" path=".apt_generated">
+		<attributes>
+			<attribute name="optional" value="true"/>
+		</attributes>
+	</classpathentry>
+	<classpathentry kind="lib" path="opt/downloaded/commons-codec-1.9.jar"/>
+	<classpathentry kind="lib" path="opt/downloaded/commons-logging-1.2.jar"/>
+	<classpathentry kind="lib" path="opt/downloaded/httpclient-4.5.3.jar"/>
+	<classpathentry kind="lib" path="opt/downloaded/httpcore-4.4.6.jar"/>
+	<classpathentry kind="output" path="impl/java/bin"/>
+</classpath>
