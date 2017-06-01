@@ -9,6 +9,7 @@ package com.ibm.streamsx.slack;
 
 
 import java.io.IOException;
+import java.util.Queue;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.http.HttpResponse;
@@ -18,9 +19,7 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.log4j.Logger;
 
-import com.ibm.streams.operator.AbstractOperator;
 import com.ibm.streams.operator.OperatorContext;
-import com.ibm.streams.operator.StreamingInput;
 import com.ibm.streams.operator.Tuple;
 import com.ibm.streams.operator.model.InputPortSet;
 import com.ibm.streams.operator.model.InputPortSet.WindowMode;
@@ -30,6 +29,7 @@ import com.ibm.streams.operator.model.InputPorts;
 import com.ibm.streams.operator.model.Libraries;
 import com.ibm.streams.operator.model.Parameter;
 import com.ibm.streams.operator.model.PrimitiveOperator;
+import com.ibm.streams.operator.samples.patterns.TupleConsumer;
 
 @PrimitiveOperator(
 		name="SendSlackMessage", 
@@ -47,7 +47,7 @@ import com.ibm.streams.operator.model.PrimitiveOperator;
 	// Include javax.mail libraries.
 	"opt/downloaded/*"
 	})
-public class SendSlackMessage extends AbstractOperator {
+public class SendSlackMessage extends TupleConsumer {
 	
 	// ------------------------------------------------------------------------
 	// Documentation.
@@ -123,7 +123,7 @@ public class SendSlackMessage extends AbstractOperator {
 	private String messageAttribute;
 	
 	/**
-	 * Http client, post - connected to Slack webhook URL.
+	 * HTTP client and post.
 	 */
 	HttpClient httpclient;
 	HttpPost httppost;
@@ -137,23 +137,28 @@ public class SendSlackMessage extends AbstractOperator {
 	
         httpclient = HttpClients.custom().setConnectionTimeToLive(1000, TimeUnit.MILLISECONDS).setMaxConnPerRoute(1000).build();
         
+        // Connect POST to Slack WebHook URL.
 		httppost = new HttpPost(slackUrl);
 		httppost.addHeader("Content-type", "application/json");
 	}
 
     /**
-     * Output message attribute to slack webhook URL.
-     * @param stream Port the tuple is arriving on.
-     * @param tuple Object representing the incoming tuple.
-     * @throws Exception Operator failure, will cause the enclosing PE to terminate.
+     * Output message attribute from batched tuple to slack WebHook URL.
+     * @param batch
      */
     @Override
-    public void process(StreamingInput<Tuple> stream, Tuple tuple)
-            throws Exception {
+    protected boolean processBatch(Queue<BatchedTuple> batch) throws Exception {
     	
-    	/**
-    	 * Message to post on slack channel.
-    	 */
+    	// Get head tuple in batch.
+    	BatchedTuple batchedTuple = batch.peek();
+    	Tuple tuple = null;
+    	if (batchedTuple != null) {
+    		tuple = batchedTuple.getTuple();
+    	} else {
+    		return true;
+    	}
+    	
+    	// Message to post on slack channel.
     	String message = null;
     	
     	// Try getting "message" attribute from ingested tuple.
@@ -165,30 +170,32 @@ public class SendSlackMessage extends AbstractOperator {
     		}
     	} catch (Exception e) {
     		_trace.error(e);
-    		return;
+    		return true;
     	}
     	
     	// Send Slack message if slack webhook URL is specified.
 		if (slackUrl != null) {
+			StringEntity params = new StringEntity("{\"text\" : \"" + message + "\""
+												+ ", \"username\" : \"" + username + "\"" 
+												+ ", \"icon_url\" : \"" + iconUrl + "\"}"
+												, "UTF-8");
+			params.setContentType("application/json");
+			httppost.setEntity(params);
+			
+			// Attempt to send message.
+			HttpResponse response = httpclient.execute(httppost);
+			int responseCode = response.getStatusLine().getStatusCode();
+			
+			// Send successful - remove message from batch queue.
+			if (responseCode == 200) {
+				batch.remove();
 				
-			Thread th = new Thread(new SendThread(message));
-			th.start();
-		
-			// Wait for all threads to finish before proceeding.
-		    int running = 0;
-		    do {
-		    	try {
-		    	    Thread.sleep(1000);
-		    	} catch(InterruptedException ex) {
-		    	    Thread.currentThread().interrupt();
-		    	}
-		    	running = 0;
-		    	
-		    	if (th.isAlive()) {
-		    		running++;
-		    	}
-		    } while (running > 0);
+				// Can only send 1 message to Slack, per second.
+				Thread.sleep(1000);
+			}
 		}
+
+		return true;
     }
 
     @Override
@@ -199,37 +206,6 @@ public class SendSlackMessage extends AbstractOperator {
         // Must call super.shutdown()
         super.shutdown();
     }
-    
-    public class SendThread extends Thread {
-    	
-    	String message;
-    	
-    	public SendThread(String message){
-    		this.message = message;
-    	}
-    	
-        public void run(){
-    		try {
-    			StringEntity params = new StringEntity("{\"text\" : \"" + message + "\""
-    												+ ", \"username\" : \"" + username + "\"" 
-    												+ ", \"icon_url\" : \"" + iconUrl + "\"}"
-    												, "UTF-8");
-    			params.setContentType("application/json");
-    			httppost.setEntity(params);
-    			
-				// Try to send message up to 5 times (Slack has limit of 1 message/sec).
-				HttpResponse response = null;
-				for (int i = 0, responseCode = 0; (i < 5) && (responseCode != 200); i++) {
-	    			response = httpclient.execute(httppost);
-					responseCode = response.getStatusLine().getStatusCode();
-					
-					sleep(1000);
-				}
-				
-			} catch (Exception e) {
-				_trace.error(e);
-			}
-        }
-    }
-    
 }
+
+
