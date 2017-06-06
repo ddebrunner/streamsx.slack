@@ -19,6 +19,7 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.log4j.Logger;
 
+import com.ibm.json.java.JSONObject;
 import com.ibm.streams.operator.OperatorContext;
 import com.ibm.streams.operator.Tuple;
 import com.ibm.streams.operator.model.InputPortSet;
@@ -175,10 +176,12 @@ public class SendSlackMessage extends TupleConsumer {
     	
     	// Send Slack message if slack webhook URL is specified.
 		if (slackUrl != null) {
-			StringEntity params = new StringEntity("{\"text\" : \"" + message + "\""
-												+ ", \"username\" : \"" + username + "\"" 
-												+ ", \"icon_url\" : \"" + iconUrl + "\"}"
-												, "UTF-8");
+			JSONObject json = new JSONObject();
+			json.put("text", message);
+			json.put("username", username);
+			json.put("icon_url", iconUrl);
+			
+			StringEntity params = new StringEntity(json.toString(), "UTF-8");
 			params.setContentType("application/json");
 			httppost.setEntity(params);
 			
