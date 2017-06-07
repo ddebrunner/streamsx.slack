@@ -60,6 +60,9 @@
 			includeantruntime="no">
 			<classpath>
 				<path refid="cp.streams" />
+                                <fileset dir="${basedir}/opt/downloaded">
+                                    <include name="*.jar"/>
+                                </fileset>
 			</classpath>
 		</javac>
 	</target>
