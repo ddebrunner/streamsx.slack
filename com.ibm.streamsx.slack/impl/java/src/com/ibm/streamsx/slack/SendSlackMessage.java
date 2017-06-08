@@ -22,6 +22,8 @@ import org.apache.log4j.Logger;
 import com.ibm.json.java.JSONObject;
 import com.ibm.streams.operator.OperatorContext;
 import com.ibm.streams.operator.Tuple;
+import com.ibm.streams.operator.TupleAttribute;
+import com.ibm.streams.operator.model.DefaultAttribute;
 import com.ibm.streams.operator.model.InputPortSet;
 import com.ibm.streams.operator.model.InputPortSet.WindowMode;
 import com.ibm.streams.operator.model.InputPortSet.WindowPunctuationInputMode;
@@ -86,11 +88,12 @@ public class SendSlackMessage extends TupleConsumer {
 		this.iconUrl = iconUrl;
 	}
 	
+	@DefaultAttribute("message")
 	@Parameter(
 			optional=true,
 			description="Incoming tuple attribute to use as content for message."
 			)
-	public void setMessageAttribute(String messageAttribute) throws IOException {
+	public void setMessageAttribute(TupleAttribute<Tuple, String> messageAttribute) throws IOException {
 		this.messageAttribute = messageAttribute;
 	}
 	
@@ -121,7 +124,7 @@ public class SendSlackMessage extends TupleConsumer {
 	/**
 	 * Attribute name of tuple to use as message content.
 	 */
-	private String messageAttribute;
+	private TupleAttribute<Tuple, String> messageAttribute;
 	
 	/**
 	 * HTTP client and post.
@@ -160,19 +163,7 @@ public class SendSlackMessage extends TupleConsumer {
     	}
     	
     	// Message to post on slack channel.
-    	String message = null;
-    	
-    	// Try getting "message" attribute from ingested tuple.
-    	try {
-    		if (messageAttribute == null) {
-    			message = tuple.getString("message");
-    		} else {
-    			message = tuple.getString(messageAttribute);
-    		}
-    	} catch (Exception e) {
-    		_trace.error(e);
-    		return true;
-    	}
+    	String message = messageAttribute.getValue(tuple);
     	
     	// Send Slack message if slack webhook URL is specified.
 		if (slackUrl != null) {
