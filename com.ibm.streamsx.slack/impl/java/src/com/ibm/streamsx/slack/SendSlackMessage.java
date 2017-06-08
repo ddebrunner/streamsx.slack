@@ -74,7 +74,8 @@ public class SendSlackMessage extends TupleConsumer {
 	
 	@Parameter(
 			optional=true,
-			description="Specified the username to display for the alert. The default is 'SendSlackMessage'."
+			description="Specified the username to display for the alert. The default is username is specified in"
+					  + "the incoming WebHook's configuration."
 			)
 	public void setUsername(String username) throws IOException {
 		this.username = username;
@@ -82,8 +83,8 @@ public class SendSlackMessage extends TupleConsumer {
 	
 	@Parameter(
 			optional=true,
-			description="Specifies the URL of the icon to display for the alert. The default icon URL is:\\n"
-						+ "https://www-01.ibm.com/software/data/infosphere/images/InfoSphere-Streams-logo_140x140.png"
+			description="Specifies the URL of the icon to display for the alert. The default icon URL is specified in "
+					  + "the incoming WebHook's configuration."
 			)
 	public void setIconUrl(String iconUrl) throws IOException {
 		this.iconUrl = iconUrl;
@@ -105,7 +106,7 @@ public class SendSlackMessage extends TupleConsumer {
 	/**
 	 * Logger for tracing.
 	 */
-//	private static Logger _trace = Logger.getLogger(SendSlackMessage.class.getName());
+	private static Logger _trace = Logger.getLogger(SendSlackMessage.class.getName());
 	
 	/**
 	 * Slack WebHook URL.
@@ -115,12 +116,12 @@ public class SendSlackMessage extends TupleConsumer {
 	/**
 	 * Username to display.
 	 */
-	private String username = "SendSlackMessage";
+	private String username;
 	
 	/**
 	 * Icon URL.
 	 */
-	private String iconUrl = "https://www-01.ibm.com/software/data/infosphere/images/InfoSphere-Streams-logo_140x140.png";
+	private String iconUrl;
 	
 	/**
 	 * Attribute name of tuple to use as message content.
@@ -165,13 +166,23 @@ public class SendSlackMessage extends TupleConsumer {
     	
     	// Message to post on slack channel.
     	String message = messageAttribute.getValue(tuple);
+		if (message == null) {
+			batch.remove();
+			return true;
+		}
     	
     	// Send Slack message if slack webhook URL is specified.
 		if (slackUrl != null) {
 			JSONObject json = new JSONObject();
 			json.put("text", message);
-			json.put("username", username);
-			json.put("icon_url", iconUrl);
+			
+			// Override WebHook username and icon, if params defined.
+			if (username != null) {
+				json.put("username", username);
+			}
+			if (iconUrl != null) {
+				json.put("icon_url", iconUrl);
+			}
 			
 			StringEntity params = new StringEntity(json.toString(), "UTF-8");
 			params.setContentType("application/json");
@@ -187,6 +198,8 @@ public class SendSlackMessage extends TupleConsumer {
 				
 				// Can only send 1 message to Slack, per second.
 				Thread.sleep(1000);
+			} else {
+				_trace.error(responseCode + response.toString());
 			}
 		}
 
@@ -202,5 +215,4 @@ public class SendSlackMessage extends TupleConsumer {
         super.shutdown();
     }
 }
-
 
