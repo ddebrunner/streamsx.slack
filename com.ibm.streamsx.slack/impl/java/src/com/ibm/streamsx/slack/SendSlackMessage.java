@@ -92,7 +92,7 @@ public class SendSlackMessage extends TupleConsumer {
 	@DefaultAttribute("message")
 	@Parameter(
 			optional=true,
-			description="Incoming tuple attribute to use as content for message."
+			description="Incoming tuple attribute to use as content for message. The default attribute to use is 'message'."
 			)
 	public void setMessageAttribute(TupleAttribute<Tuple, String> messageAttribute) throws IOException {
 		this.messageAttribute = messageAttribute;
