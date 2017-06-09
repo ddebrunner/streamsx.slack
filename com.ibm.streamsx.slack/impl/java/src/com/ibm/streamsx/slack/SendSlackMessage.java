@@ -66,7 +66,7 @@ public class SendSlackMessage extends TupleConsumer {
 	
 	@Parameter(
 			optional=false,
-			description="Specifies the Slack incoming WebHook URL to send alert to."
+			description="Specifies the Slack incoming WebHook URL to send message to."
 			)
 	public void setSlackUrl(String slackUrl) throws IOException {
 		this.slackUrl = slackUrl;
@@ -74,7 +74,7 @@ public class SendSlackMessage extends TupleConsumer {
 	
 	@Parameter(
 			optional=true,
-			description="Specified the username to display for the alert. The default is username is specified in"
+			description="Specified the username to display for the message. The default username is specified in"
 					  + "the incoming WebHook's configuration."
 			)
 	public void setUsername(String username) throws IOException {
@@ -83,7 +83,7 @@ public class SendSlackMessage extends TupleConsumer {
 	
 	@Parameter(
 			optional=true,
-			description="Specifies the URL of the icon to display for the alert. The default icon URL is specified in "
+			description="Specifies the URL of the icon to display for the message. The default icon is specified in "
 					  + "the incoming WebHook's configuration."
 			)
 	public void setIconUrl(String iconUrl) throws IOException {
