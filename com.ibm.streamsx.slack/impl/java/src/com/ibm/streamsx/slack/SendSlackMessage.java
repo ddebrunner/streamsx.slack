@@ -66,7 +66,7 @@ public class SendSlackMessage extends TupleConsumer {
 	
 	@Parameter(
 			optional=false,
-			description="Slack incoming webhook URL to send alert to."
+			description="Specifies the Slack incoming WebHook URL to send message to."
 			)
 	public void setSlackUrl(String slackUrl) throws IOException {
 		this.slackUrl = slackUrl;
@@ -74,7 +74,8 @@ public class SendSlackMessage extends TupleConsumer {
 	
 	@Parameter(
 			optional=true,
-			description="Username to display for alert."
+			description="Specified the username to display for the message. The default username is specified in "
+					  + "the incoming WebHook's configuration."
 			)
 	public void setUsername(String username) throws IOException {
 		this.username = username;
@@ -82,7 +83,8 @@ public class SendSlackMessage extends TupleConsumer {
 	
 	@Parameter(
 			optional=true,
-			description="Icon to display for alert."
+			description="Specifies the URL of the icon to display for the message. The default icon is specified in "
+					  + "the incoming WebHook's configuration."
 			)
 	public void setIconUrl(String iconUrl) throws IOException {
 		this.iconUrl = iconUrl;
@@ -91,7 +93,7 @@ public class SendSlackMessage extends TupleConsumer {
 	@DefaultAttribute("message")
 	@Parameter(
 			optional=true,
-			description="Incoming tuple attribute to use as content for message."
+			description="Incoming tuple attribute to use as content for message. The default attribute to use is 'message'."
 			)
 	public void setMessageAttribute(TupleAttribute<Tuple, String> messageAttribute) throws IOException {
 		this.messageAttribute = messageAttribute;
@@ -107,19 +109,19 @@ public class SendSlackMessage extends TupleConsumer {
 	private static Logger _trace = Logger.getLogger(SendSlackMessage.class.getName());
 	
 	/**
-	 * Slack webhook URL.
+	 * Slack WebHook URL.
 	 */
 	private String slackUrl;
 	
 	/**
 	 * Username to display.
 	 */
-	private String username = "SendSlackMessage";
+	private String username;
 	
 	/**
 	 * Icon URL.
 	 */
-	private String iconUrl = "https://www-01.ibm.com/software/data/infosphere/images/InfoSphere-Streams-logo_140x140.png";
+	private String iconUrl;
 	
 	/**
 	 * Attribute name of tuple to use as message content.
@@ -169,8 +171,14 @@ public class SendSlackMessage extends TupleConsumer {
 		if (slackUrl != null) {
 			JSONObject json = new JSONObject();
 			json.put("text", message);
-			json.put("username", username);
-			json.put("icon_url", iconUrl);
+			
+			// Override WebHook username and icon, if params defined.
+			if (username != null) {
+				json.put("username", username);
+			}
+			if (iconUrl != null) {
+				json.put("icon_url", iconUrl);
+			}
 			
 			StringEntity params = new StringEntity(json.toString(), "UTF-8");
 			params.setContentType("application/json");
@@ -186,11 +194,15 @@ public class SendSlackMessage extends TupleConsumer {
 				
 				// Can only send 1 message to Slack, per second.
 				Thread.sleep(1000);
+			} else {
+				_trace.error(responseCode + response.toString());
 			}
 		}
 
 		return true;
     }
+    
+    public void setBatchSize(int batchSize) { }
 
     @Override
     public synchronized void shutdown() throws Exception {
@@ -201,5 +213,4 @@ public class SendSlackMessage extends TupleConsumer {
         super.shutdown();
     }
 }
-
 
