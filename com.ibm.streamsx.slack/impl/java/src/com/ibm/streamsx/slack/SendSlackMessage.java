@@ -166,10 +166,6 @@ public class SendSlackMessage extends TupleConsumer {
     	
     	// Message to post on slack channel.
     	String message = messageAttribute.getValue(tuple);
-		if (message == null) {
-			batch.remove();
-			return true;
-		}
     	
     	// Send Slack message if slack webhook URL is specified.
 		if (slackUrl != null) {
