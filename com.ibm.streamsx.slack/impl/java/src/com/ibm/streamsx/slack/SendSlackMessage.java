@@ -74,7 +74,7 @@ public class SendSlackMessage extends TupleConsumer {
 	
 	@Parameter(
 			optional=true,
-			description="Specified the username to display for the message. The default username is specified in"
+			description="Specified the username to display for the message. The default username is specified in "
 					  + "the incoming WebHook's configuration."
 			)
 	public void setUsername(String username) throws IOException {
@@ -201,6 +201,8 @@ public class SendSlackMessage extends TupleConsumer {
 
 		return true;
     }
+    
+    public void setBatchSize(int batchSize) { }
 
     @Override
     public synchronized void shutdown() throws Exception {
