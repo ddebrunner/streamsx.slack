@@ -58,11 +58,14 @@ public class SendSlackMessage extends TupleConsumer {
 	// ------------------------------------------------------------------------
 
 	static final String DESC_OPERATOR = 
-			"The SendSlackMessage operator outputs the contents of the messageAttr attribute from "
+			"The SendSlackMessage operator outputs the contents of the messageAttribute from "
 		  + "incoming tuples to the Slack WebHook URL specified in the parameters."
 		  + "\\n"
+		  + "The default messageAttribute is: message. This can be changed through the "
+		  + "messageAttribute parameter."
+		  + "\\n"
 		  + "Custom usernames and icons can be used, instead of the default ones, through the "
-		  + "usernameAttr and iconUrlAttr attributes."
+		  + "usernameAttribute and iconUrlAttribute parameters."
 		  + "\\n";
 	
 	@Parameter(
