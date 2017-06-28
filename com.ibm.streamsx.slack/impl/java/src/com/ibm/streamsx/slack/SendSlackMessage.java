@@ -94,6 +94,17 @@ public class SendSlackMessage extends TupleConsumer {
 		this.iconUrlAttribute = iconUrlAttribute;
 	}
 	
+	@Parameter(
+			optional=true,
+			description="Incoming tuple attribute that specifies the icon emoji for the slack message. "
+					  + "This will be used in-place of the icon URL, if specified. The incoming WebHook's "
+					  + "configuration allows users to choose between an icon or an emoji. If no icon URL or "
+					  + "emoji attributes are found, the default icon in the WebHook's configuration will be used."
+			)
+	public void setIconEmojiAttribute(TupleAttribute<Tuple, String> iconEmojiAttribute) throws IOException {
+		this.iconEmojiAttribute = iconEmojiAttribute;
+	}
+	
 	@DefaultAttribute("message")
 	@Parameter(
 			optional=true,
@@ -127,6 +138,11 @@ public class SendSlackMessage extends TupleConsumer {
 	 * Attribute containing icon URL to use for message.
 	 */
 	private TupleAttribute<Tuple, String> iconUrlAttribute;
+	
+	/**
+	 * Attribute containing icon emoji to use for message.
+	 */
+	private TupleAttribute<Tuple, String> iconEmojiAttribute;
 	
 	/**
 	 * Attribute containing message to send.
@@ -178,12 +194,15 @@ public class SendSlackMessage extends TupleConsumer {
 			JSONObject json = new JSONObject();
 			json.put("text", message);
 			
-			// Override WebHook username and icon, if params defined.
+			// Override WebHook username and icon/emoji, if params defined.
 			if (usernameAttribute != null) {
 				json.put("username", usernameAttribute.getValue(tuple));
 			}
 			if (iconUrlAttribute != null) {
 				json.put("icon_url", iconUrlAttribute.getValue(tuple));
+			}
+			if (iconEmojiAttribute != null) {
+				json.put("icon_emoji", iconEmojiAttribute.getValue(tuple));
 			}
 			
 			StringEntity params = new StringEntity(json.toString(), "UTF-8");
