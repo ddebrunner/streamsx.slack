@@ -1,0 +1,58 @@
+//
+// ****************************************************************************
+// * Copyright (C) 2017, International Business Machines Corporation          *
+// * All rights reserved.                                                     *
+// ****************************************************************************
+//
+
+/**
+ * This sample application generates and sends a message to a Slack 
+ * channel every 5 minutes (Slack time limit for refreshing message icons).
+ * 
+ * Each auto-generated message should use the following username: 
+ * "Auto-Generated-Username-" + IterationCount().
+ */
+namespace com.ibm.streamsx.slack.sample.CustomUsername ;
+
+use com.ibm.streamsx.slack::SendSlackMessage ;
+
+composite Main
+{
+	graph
+		/**
+		 * GenerateIteration outputs the current iteration count of the beacon.
+		 */
+		stream<int32 iteration> GenerateIteration = Beacon()
+		{
+			param
+				period : 300.0 ;
+				
+			output
+				GenerateIteration: iteration = (int32) IterationCount() + 1;
+		}
+
+		/**
+		 * GenerateMessage generates a message and username using the current iteration count.
+		 */
+		stream<rstring message, rstring username> GenerateMessage = Custom(GenerateIteration)
+		{
+			logic
+				onTuple GenerateIteration :
+				{
+					submit({message = "This is auto-generated message #" + (rstring) GenerateIteration.iteration,
+							username = "Auto-Generated-Username-" + (rstring) GenerateIteration.iteration}, GenerateMessage);
+				}
+		}
+		
+		/**
+		 * SendMessage sends the generated message to the given slack URL.
+		 */
+		() as SendMessage = SendSlackMessage(GenerateMessage)
+		{
+			param
+				slackUrl : getSubmissionTimeValue("slackUrl") ;
+				usernameAttribute : username ;
+		}
+
+}
+

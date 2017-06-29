@@ -1,0 +1,42 @@
+//
+// ****************************************************************************
+// * Copyright (C) 2017, International Business Machines Corporation          *
+// * All rights reserved.                                                     *
+// ****************************************************************************
+//
+
+/**
+ * This sample application generates and sends a 'Hello World!' message to 
+ * a Slack channel every 5 minutes (Slack time limit for refreshing message icons).
+ */
+namespace com.ibm.streamsx.slack.sample.HelloWorld ;
+
+use com.ibm.streamsx.slack::SendSlackMessage ;
+
+composite Main
+{
+	graph
+		/**
+		 * GenerateMessage outputs a 'Hello World' message every 5 minutes.
+		 */
+		stream<rstring helloMessage> GenerateMessage = Beacon()
+		{
+			param
+				period : 300.0 ;
+				
+			output
+				GenerateMessage: helloMessage = "Hello World!";
+		}
+		
+		/**
+		 * SendMessage sends the generated message to the given slack URL.
+		 */
+		() as SendMessage = SendSlackMessage(GenerateMessage)
+		{
+			param
+				slackUrl : getSubmissionTimeValue("slackUrl") ;
+				messageAttribute : helloMessage ;
+		}
+
+}
+
