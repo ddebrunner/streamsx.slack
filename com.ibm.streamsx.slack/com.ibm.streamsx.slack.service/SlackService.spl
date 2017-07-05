@@ -1,0 +1,63 @@
+//
+// ****************************************************************************
+// * Copyright (C) 2017, International Business Machines Corporation          *
+// * All rights reserved.                                                     *
+// ****************************************************************************
+//
+
+/**
+ * A service which subscribes to a user-specified topic (in the parameters). 
+ * The incoming tuple should contain a jsonString. The jsonString, once converted, 
+ * should contain a message attribute with the text contents to send to Slack.
+ * 
+ * Input JSON Schema:
+ * {
+ *   message : string
+ * }
+ */
+
+namespace com.ibm.streamsx.slack.service;
+
+use com.ibm.streamsx.json::JSONToTuple ;
+use com.ibm.streamsx.slack::SendSlackMessage ;
+use com.ibm.streamsx.topology.topic::Subscribe ;
+
+public composite SlackService
+{
+	param
+		expression<rstring> $applicationConfigurationName ;
+		expression<rstring> $topic ;
+		
+	type
+		JSONType = rstring jsonString ;
+		
+	graph
+		/**
+		 * The Subscribe ingests data from the specified topic and outputs it.
+		 */
+		stream<JSONType> Subscribe_0 = Subscribe()
+		{
+			param
+				topic : $topic ;
+				streamType : JSONType ;
+		}
+		
+		/**
+		 * The JSONToTuple extracts the message attribute from the incoming JSON 
+		 * string and outputs it.
+		 */
+		stream<rstring message> JSONToTuple_0 = JSONToTuple(Subscribe_0)
+		{
+
+		}
+		
+		/**
+		 * The SendSlackMessage sends the message attribute's content to the Slack 
+		 * URL specified in the application configuration.
+		 */
+		() as SendSlackMessage_0 = SendSlackMessage(JSONToTuple_0)
+		{
+			param
+				applicationConfigurationName : $applicationConfigurationName ;
+		}
+}
