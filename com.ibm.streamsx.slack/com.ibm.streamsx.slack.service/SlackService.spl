@@ -18,35 +18,32 @@
 
 namespace com.ibm.streamsx.slack.service;
 
-use com.ibm.streamsx.json::JSONToTuple ;
 use com.ibm.streamsx.slack::SendSlackMessage ;
+use com.ibm.streamsx.json::* ;
 use com.ibm.streamsx.topology.topic::Subscribe ;
 
 public composite SlackService
 {
 	param
-		expression<rstring> $applicationConfigurationName ;
-		expression<rstring> $topic ;
-		
-	type
-		JSONType = rstring jsonString ;
+		expression<rstring> $applicationConfigurationName : getSubmissionTimeValue("applicationConfigurationName", "slackConfiguration");
+		expression<rstring> $topic : getSubmissionTimeValue("topic", "streamsx/slack/message");
 		
 	graph
 		/**
 		 * The Subscribe ingests data from the specified topic and outputs it.
 		 */
-		stream<JSONType> Subscribe_0 = Subscribe()
+		stream<Json> JsonMessage = Subscribe()
 		{
 			param
 				topic : $topic ;
-				streamType : JSONType ;
+				streamType : Json ;
 		}
 		
 		/**
 		 * The JSONToTuple extracts the message attribute from the incoming JSON 
 		 * string and outputs it.
 		 */
-		stream<rstring message> JSONToTuple_0 = JSONToTuple(Subscribe_0)
+		stream<rstring message> Message = JSONToTuple(JsonMessage)
 		{
 
 		}
@@ -55,7 +52,7 @@ public composite SlackService
 		 * The SendSlackMessage sends the message attribute's content to the Slack 
 		 * URL specified in the application configuration.
 		 */
-		() as SendSlackMessage_0 = SendSlackMessage(JSONToTuple_0)
+		() as SendSlackMessage_0 = SendSlackMessage(Message)
 		{
 			param
 				applicationConfigurationName : $applicationConfigurationName ;
