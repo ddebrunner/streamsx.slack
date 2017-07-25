@@ -1,1 +1,5 @@
-theme: jekyll-theme-modernist
+title: streamsx.slack
+description: A toolkit for sending Slack messages from Streams applications to Slack channels.
+show_downloads: true
+google_analytics:
+theme: 
