@@ -21,6 +21,7 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
 
 import com.ibm.json.java.JSONObject;
@@ -243,6 +244,7 @@ public class SendSlackMessage extends TupleConsumer {
 		// Attempt to send message.
 		HttpResponse response = httpclient.execute(httppost);
 		int responseCode = response.getStatusLine().getStatusCode();
+                EntityUtils.consume(response.getEntity());
 		
 		// Send successful - remove message from batch queue.
 		if (responseCode == 200) {
