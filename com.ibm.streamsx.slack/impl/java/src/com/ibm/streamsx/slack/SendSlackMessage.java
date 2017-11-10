@@ -9,14 +9,13 @@ package com.ibm.streamsx.slack;
 
 
 import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
@@ -26,14 +25,12 @@ import org.apache.log4j.Logger;
 
 import com.ibm.json.java.JSONObject;
 import com.ibm.streams.operator.OperatorContext;
-import com.ibm.streams.operator.ProcessingElement;
 import com.ibm.streams.operator.Tuple;
 import com.ibm.streams.operator.TupleAttribute;
 import com.ibm.streams.operator.model.DefaultAttribute;
 import com.ibm.streams.operator.model.InputPortSet;
 import com.ibm.streams.operator.model.InputPortSet.WindowMode;
 import com.ibm.streams.operator.model.InputPortSet.WindowPunctuationInputMode;
-
 import com.ibm.streams.operator.model.InputPorts;
 import com.ibm.streams.operator.model.Libraries;
 import com.ibm.streams.operator.model.Parameter;
@@ -180,6 +177,8 @@ public class SendSlackMessage extends TupleConsumer {
 	 */
 	private String applicationConfigurationName;
 	
+	private Map<String,String> applicationProperties;
+	
 	/**
 	 * HTTP client and post.
 	 */
@@ -192,8 +191,13 @@ public class SendSlackMessage extends TupleConsumer {
     	// Must call super.initialize(context) to correctly setup an operator.
 		super.initialize(context);
         Logger.getLogger(this.getClass()).trace("Operator " + context.getName() + " initializing in PE: " + context.getPE().getPEId() + " in Job: " + context.getPE().getJobId() );
+        
+        fetchApplicationProperties();
+        
+        // Test we have a URL early
+        updateSlackUrl();
 	
-        httpclient = HttpClients.custom().setConnectionTimeToLive(1000, TimeUnit.MILLISECONDS).setMaxConnPerRoute(1000).build();
+        httpclient = HttpClients.custom().setConnectionTimeToLive(30, TimeUnit.SECONDS).setMaxConnPerRoute(1000).build();
 	}
 
     /**
@@ -244,21 +248,25 @@ public class SendSlackMessage extends TupleConsumer {
 		// Attempt to send message.
 		HttpResponse response = httpclient.execute(httppost);
 		int responseCode = response.getStatusLine().getStatusCode();
-                EntityUtils.consume(response.getEntity());
+		EntityUtils.consume(response.getEntity());
 		
 		// Send successful - remove message from batch queue.
-		if (responseCode == 200) {
+		if (responseCode == HttpStatus.SC_OK) {
 			batch.remove();
 			
 			// Can only send 1 message to Slack, per second.
 			Thread.sleep(1000);
 		} else {
-			_trace.error(responseCode + response.toString());
+	         _trace.error(responseCode + response.toString());
+	          
+	        // With a 404 maybe a URL has been updated in the application config.
+		    if (responseCode == HttpStatus.SC_NOT_FOUND)
+		        fetchApplicationProperties();
 		}
 
 		return true;
     }
-    
+
     public void setBatchSize(int batchSize) { }
 
     @Override
@@ -275,18 +283,15 @@ public class SendSlackMessage extends TupleConsumer {
      * @throws Exception
      */
     private void updateSlackUrl() throws Exception {
-    	if (applicationConfigurationName != null) {
-			Map<String,String> properties = getApplicationConfiguration(applicationConfigurationName);
-			if (properties.containsKey(PARAM_SLACK_URL)) {
-				String applicationConfigurationSlackUrl = properties.get(PARAM_SLACK_URL);
-				if (!applicationConfigurationSlackUrl.equals(slackUrl)) {
-					slackUrl = properties.get(PARAM_SLACK_URL);
-					httppost = new HttpPost(slackUrl);
-					httppost.addHeader("Content-type", "application/json");
-				}
-				return;
-			}
-		}
+        if (applicationProperties.containsKey(PARAM_SLACK_URL)) {
+            String applicationConfigurationSlackUrl = applicationProperties.get(PARAM_SLACK_URL);
+            if (!applicationConfigurationSlackUrl.equals(slackUrl)) {
+                slackUrl = applicationConfigurationSlackUrl;
+                httppost = new HttpPost(slackUrl);
+                httppost.addHeader("Content-type", "application/json");
+            }
+            return;
+        }
     	
     	// Slack URL in application configuration not defined. Use slackUrl from operator parameters, instead.
     	if (slackUrl != null) {
@@ -302,13 +307,10 @@ public class SendSlackMessage extends TupleConsumer {
   	 * message attribute specified in application configuration to get message, instead.
   	 */
   	private String getMessage(Tuple tuple) {
-  		if (applicationConfigurationName != null) {
-  			Map<String,String> properties = getApplicationConfiguration(applicationConfigurationName);
-  			if (properties.containsKey(PARAM_MESSAGE_ATTR)) {
-  				String applicationConfigurationMessage = properties.get(PARAM_MESSAGE_ATTR);
-  				return tuple.getString(applicationConfigurationMessage);
-  			}
-  		}
+        if (applicationProperties.containsKey(PARAM_MESSAGE_ATTR)) {
+            String applicationConfigurationMessage = applicationProperties.get(PARAM_MESSAGE_ATTR);
+            return tuple.getString(applicationConfigurationMessage);
+        }
 		return messageAttribute.getValue(tuple);
   	}
     
@@ -317,16 +319,14 @@ public class SendSlackMessage extends TupleConsumer {
 	 * username attribute specified in application configuration to get username, instead.
 	 */
 	private String getUsername(Tuple tuple) {
-		if (applicationConfigurationName != null) {
-			Map<String,String> properties = getApplicationConfiguration(applicationConfigurationName);
-			if (properties.containsKey(PARAM_USERNAME_ATTR)) {
-				String applicationConfigurationUsername = properties.get(PARAM_USERNAME_ATTR);
-				return tuple.getString(applicationConfigurationUsername);
-			}
-			
-		} else if (usernameAttribute != null) {
-			return usernameAttribute.getValue(tuple);
-		}
+        if (applicationProperties.containsKey(PARAM_USERNAME_ATTR)) {
+            String applicationConfigurationUsername = applicationProperties.get(PARAM_USERNAME_ATTR);
+            return tuple.getString(applicationConfigurationUsername);
+        }
+
+        if (usernameAttribute != null) {
+            return usernameAttribute.getValue(tuple);
+        }
 		return null;
 	}
 	
@@ -335,13 +335,11 @@ public class SendSlackMessage extends TupleConsumer {
 	 * iconUrl attribute specified in application configuration to get iconUrl, instead.
 	 */
 	private String getIconUrl(Tuple tuple) {
-		if (applicationConfigurationName != null) {
-			Map<String,String> properties = getApplicationConfiguration(applicationConfigurationName);
-			if (properties.containsKey(PARAM_ICON_URL_ATTR)) {
-				String applicationConfigurationIconUrl = properties.get(PARAM_ICON_URL_ATTR);
-				return tuple.getString(applicationConfigurationIconUrl);
-			}
-		} else if (iconUrlAttribute != null) {
+        if (applicationProperties.containsKey(PARAM_ICON_URL_ATTR)) {
+            String applicationConfigurationIconUrl = applicationProperties.get(PARAM_ICON_URL_ATTR);
+            return tuple.getString(applicationConfigurationIconUrl);
+        }
+		if (iconUrlAttribute != null) {
 			return iconUrlAttribute.getValue(tuple);
 		}
 		return null;
@@ -352,13 +350,11 @@ public class SendSlackMessage extends TupleConsumer {
 	 * iconEmoji attribute specified in application configuration to get iconEmoji, instead.
 	 */
 	private String getIconEmoji(Tuple tuple) {
-		if (applicationConfigurationName != null) {
-			Map<String,String> properties = getApplicationConfiguration(applicationConfigurationName);
-			if (properties.containsKey(PARAM_ICON_EMOJI_ATTR)) {
-				String applicationConfigurationIconEmoji = properties.get(PARAM_ICON_EMOJI_ATTR);
-				return tuple.getString(applicationConfigurationIconEmoji);
-			}
-		} else if (iconEmojiAttribute != null) {
+        if (applicationProperties.containsKey(PARAM_ICON_EMOJI_ATTR)) {
+            String applicationConfigurationIconEmoji = applicationProperties.get(PARAM_ICON_EMOJI_ATTR);
+            return tuple.getString(applicationConfigurationIconEmoji);
+        }
+        if (iconEmojiAttribute != null) {
 			return iconEmojiAttribute.getValue(tuple);
 		}
 		return null;
@@ -369,22 +365,16 @@ public class SendSlackMessage extends TupleConsumer {
 	 * retrieve the application configuration if application configuration
 	 * is supported.
 	 * 
-	 * @return
-	 * The application configuration.
+	 * Called only at initialization or if a 404 is received.
 	 */
-	@SuppressWarnings("unchecked")
-	protected Map<String,String> getApplicationConfiguration(String applicationConfigurationName) {
-		Map<String,String> properties = null;
-		try {
-			ProcessingElement pe = getOperatorContext().getPE();
-			Method method = ProcessingElement.class.getMethod("getApplicationConfiguration", new Class[]{String.class});
-			Object returnedObject = method.invoke(pe, applicationConfigurationName);
-			properties = (Map<String,String>)returnedObject;
+	protected void fetchApplicationProperties() {
+		
+		if (applicationConfigurationName == null) {
+			applicationProperties = Collections.emptyMap();
+			return;
 		}
-		catch (NoSuchMethodException | SecurityException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-			properties = new HashMap<>();
-		}
-		return properties;
+		
+		applicationProperties = getOperatorContext().getPE().getApplicationConfiguration(applicationConfigurationName);
 	}
 }
 
