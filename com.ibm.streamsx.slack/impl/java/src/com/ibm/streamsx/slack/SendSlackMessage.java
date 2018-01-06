@@ -67,8 +67,8 @@ public class SendSlackMessage extends TupleConsumer {
 		  + "The default messageAttribute is: message. This can be changed through the "
 		  + "messageAttribute parameter."
 		  + "\\n"
-		  + "Custom usernames and icons can be used, instead of the default ones, through the "
-		  + "usernameAttribute and iconUrlAttribute parameters."
+		  + "Custom icons can be used, instead of the default ones, through the "
+		  + "iconUrlAttribute and iconEmojiAttribute parameters."
 		  + "\\n";
 	
 	@Parameter(
