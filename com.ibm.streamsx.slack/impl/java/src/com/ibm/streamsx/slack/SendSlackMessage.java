@@ -174,9 +174,6 @@ public class SendSlackMessage extends TupleConsumer {
     	// Simply convert the full tuple to JSON and send that
     	// as the message.
     	String msg = tuple2JSON.encodeAsString(tuple);
-    	
-    	System.out.println("MSG:" + msg);
-    	System.out.flush();
 		
 		StringEntity params = new StringEntity(msg, "UTF-8");
 		params.setContentType("application/json");
