@@ -67,8 +67,8 @@ public class SendSlackMessage extends TupleConsumer {
 		  + "The default messageAttribute is: message. This can be changed through the "
 		  + "messageAttribute parameter."
 		  + "\\n"
-		  + "Custom usernames and icons can be used, instead of the default ones, through the "
-		  + "usernameAttribute and iconUrlAttribute parameters."
+		  + "Custom icons can be used, instead of the default ones, through the "
+		  + "iconUrlAttribute and iconEmojiAttribute parameters."
 		  + "\\n";
 	
 	@Parameter(
@@ -77,15 +77,6 @@ public class SendSlackMessage extends TupleConsumer {
 			)
 	public void setSlackUrl(String slackUrl) throws IOException {
 		this.slackUrl = slackUrl;
-	}
-	
-	@Parameter(
-			optional=true,
-			description="Incoming tuple attribute that specifies the username for the slack message. "
-					  + "The default username is specified in the incoming WebHook's configuration."
-			)
-	public void setUsernameAttribute(TupleAttribute<Tuple, String> usernameAttribute) throws IOException {
-		this.usernameAttribute = usernameAttribute;
 	}
 	
 	@Parameter(
@@ -143,7 +134,6 @@ public class SendSlackMessage extends TupleConsumer {
 	 */
 	private static final String PARAM_SLACK_URL = "slackUrl",
 								PARAM_MESSAGE_ATTR = "messageAttribute",
-								PARAM_USERNAME_ATTR = "usernameAttribute",
 								PARAM_ICON_URL_ATTR = "iconUrlAttribute",
 								PARAM_ICON_EMOJI_ATTR = "iconEmojiAttribute";
 	
@@ -151,11 +141,6 @@ public class SendSlackMessage extends TupleConsumer {
 	 * Slack incoming WebHook URL.
 	 */
 	private String slackUrl;
-	
-	/**
-	 * Attribute containing username to use for message.
-	 */
-	private TupleAttribute<Tuple, String> usernameAttribute;
 	
 	/**
 	 * Attribute containing icon URL to use for message.
@@ -224,12 +209,6 @@ public class SendSlackMessage extends TupleConsumer {
     	
 		JSONObject json = new JSONObject();
 		json.put("text", message);
-		
-		// Override WebHook username and icon/emoji, if params defined.
-		String username = getUsername(tuple);
-		if (username != null) {
-			json.put("username", username);
-		}
 		
 		String iconUrl = getIconUrl(tuple);
 		if (iconUrl != null) {
@@ -313,22 +292,6 @@ public class SendSlackMessage extends TupleConsumer {
         }
 		return messageAttribute.getValue(tuple);
   	}
-    
-    /**
-	 * Retrieve username from incoming tuple. If applicationConfigurationName is specified, use 
-	 * username attribute specified in application configuration to get username, instead.
-	 */
-	private String getUsername(Tuple tuple) {
-        if (applicationProperties.containsKey(PARAM_USERNAME_ATTR)) {
-            String applicationConfigurationUsername = applicationProperties.get(PARAM_USERNAME_ATTR);
-            return tuple.getString(applicationConfigurationUsername);
-        }
-
-        if (usernameAttribute != null) {
-            return usernameAttribute.getValue(tuple);
-        }
-		return null;
-	}
 	
     /**
 	 * Retrieve iconUrl from incoming tuple. If applicationConfigurationName is specified, use 
