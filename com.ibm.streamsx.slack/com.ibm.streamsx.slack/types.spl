@@ -1,0 +1,17 @@
+// ****************************************************************************
+// * Copyright (C) 2018, International Business Machines Corporation          *
+// ****************************************************************************
+namespace com.ibm.streamsx.slack;
+
+/**
+ * Slack message schema.
+ * Single `text` attribute corresponding to the text of the message.
+ */
+type Message = tuple<rstring text>;
+
+/**
+ * Slack message with emoji.
+ * Extends [Message] to add the `icon_emoji` attribute to
+ * specify the emoji of the message.
+ */
+type EmojiMessage = Message, tuple<rstring icon_emoji>;

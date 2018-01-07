@@ -1,7 +1,6 @@
 //
 // ****************************************************************************
 // * Copyright (C) 2017, International Business Machines Corporation          *
-// * All rights reserved.                                                     *
 // ****************************************************************************
 //
 
@@ -11,21 +10,22 @@
  */
 namespace com.ibm.streamsx.slack.sample.HelloWorld ;
 
+use com.ibm.streamsx.slack::Message ;
 use com.ibm.streamsx.slack::SendSlackMessage ;
 
-composite Main
+public composite Main
 {
 	graph
 		/**
 		 * GenerateMessage outputs a 'Hello World' message every 5 minutes.
 		 */
-		stream<rstring helloMessage> GenerateMessage = Beacon()
+		stream<Message> GenerateMessage = Beacon()
 		{
 			param
 				period : 300.0 ;
 				
 			output
-				GenerateMessage: helloMessage = "Hello World!";
+				GenerateMessage: text = "Hello World! - " + (rstring) IterationCount();
 		}
 		
 		/**
@@ -35,7 +35,6 @@ composite Main
 		{
 			param
 				slackUrl : getSubmissionTimeValue("slackUrl") ;
-				messageAttribute : helloMessage ;
 		}
 
 }
