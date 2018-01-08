@@ -24,8 +24,10 @@ import org.apache.log4j.Logger;
 
 import com.ibm.json.java.JSONArray;
 import com.ibm.json.java.JSONObject;
+import com.ibm.streams.operator.Attribute;
 import com.ibm.streams.operator.OperatorContext;
 import com.ibm.streams.operator.OperatorContext.ContextCheck;
+import com.ibm.streams.operator.StreamSchema;
 import com.ibm.streams.operator.StreamingInput;
 import com.ibm.streams.operator.Tuple;
 import com.ibm.streams.operator.Type;
@@ -75,11 +77,48 @@ public class SendSlackMessage extends TupleConsumer {
 	public static void validateSchema(OperatorContextChecker checker) {
 	    
 	    StreamingInput<?> port = checker.getOperatorContext().getStreamingInputs().get(0);
+	    StreamSchema schema = port.getStreamSchema();
+	    
+	    if (isJson(schema))
+	        return;
+	    
+	    if (isStringAttribute(schema))
+	        return;
 	    
 	    if (!checker.checkRequiredAttributes(port, "text"))
 	        return;
-	    checker.checkAttributeType(port.getStreamSchema().getAttribute("text"),
+	    checker.checkAttributeType(schema.getAttribute("text"),
 	            Type.MetaType.RSTRING, Type.MetaType.USTRING);	    
+	}
+
+    /**
+     * Return true if the schema is Json.
+     */
+    private static boolean isJson(StreamSchema schema) {
+        if (schema.getAttributeCount() == 1) {
+            Attribute attr = schema.getAttribute(0);
+            if (attr.getType().getMetaType() == Type.MetaType.RSTRING) {
+                return attr.getName().equals("jsonString");
+            }
+        }
+        return false;
+    }
+    
+	/**
+	 * Return true if the schema contains a single string attribute
+	 * (not named text).
+	 */
+	private static boolean isStringAttribute(StreamSchema schema) {
+        if (schema.getAttributeCount() == 1) {
+            Attribute attr = schema.getAttribute(0);
+            if (attr.getType().getMetaType() == Type.MetaType.RSTRING
+                || attr.getType().getMetaType() == Type.MetaType.USTRING) {
+                if (!attr.getName().equals("text")) {
+                    return true;
+                }
+            }
+        }
+        return false;
 	}
 	
 	@Parameter(
@@ -127,6 +166,18 @@ public class SendSlackMessage extends TupleConsumer {
 	
 	private Map<String,String> applicationProperties;
 	 
+	/**
+     * True if the schema is Json (rstring jsonString).
+     * Value is used as-is for the request body.
+     */
+    private boolean json;
+    
+	/**
+	 * True if the schema is a single string attribute
+	 * used as the message text.
+	 */
+	private boolean singleString;
+	
 	private JSONEncoding<JSONObject, JSONArray> tuple2JSON;
 	
 	/**
@@ -149,7 +200,15 @@ public class SendSlackMessage extends TupleConsumer {
 	
         httpclient = HttpClients.custom().setConnectionTimeToLive(30, TimeUnit.SECONDS).setMaxConnPerRoute(1000).build();
         
-        tuple2JSON = EncodingFactory.getJSONEncoding();
+        // Figure out how tuples are converted to the JSON message body
+        // for the webhook.
+        
+        if (isJson(getInput(0).getStreamSchema()))
+            json = true;
+        else if (isStringAttribute(getInput(0).getStreamSchema()))
+            singleString = true;
+        else
+            tuple2JSON = EncodingFactory.getJSONEncoding();
 	}
 
     /**
@@ -171,9 +230,21 @@ public class SendSlackMessage extends TupleConsumer {
     	// Update slackUrl with the one defined in the application configuration.
     	updateSlackUrl();
     	
-    	// Simply convert the full tuple to JSON and send that
-    	// as the message.
-    	String msg = tuple2JSON.encodeAsString(tuple);
+    	String msg;
+    	
+    	if (json) {
+    	    // Use JSON value as-is
+    	    msg = tuple.getString(0);
+    	} else if (singleString) {
+    	    // Single String attribute use as the text value.
+    	    JSONObject obj = new JSONObject();
+    	    obj.put("text", tuple.getString(0));
+    	    msg = obj.toString();
+    	} else {
+    	    // Simply convert the full tuple to JSON and send that
+    	    // as the message.
+    	    msg = tuple2JSON.encodeAsString(tuple);
+    	}
 		
 		StringEntity params = new StringEntity(msg, "UTF-8");
 		params.setContentType("application/json");
