@@ -1,7 +1,6 @@
 //
 // ****************************************************************************
-// * Copyright (C) 2017, International Business Machines Corporation          *
-// * All rights reserved.                                                     *
+// * Copyright (C) 2017,2018 International Business Machines Corporation      *                                                     *
 // ****************************************************************************
 //
 
@@ -23,11 +22,16 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
 
+import com.ibm.json.java.JSONArray;
 import com.ibm.json.java.JSONObject;
 import com.ibm.streams.operator.OperatorContext;
+import com.ibm.streams.operator.OperatorContext.ContextCheck;
+import com.ibm.streams.operator.StreamingInput;
 import com.ibm.streams.operator.Tuple;
-import com.ibm.streams.operator.TupleAttribute;
-import com.ibm.streams.operator.model.DefaultAttribute;
+import com.ibm.streams.operator.Type;
+import com.ibm.streams.operator.compile.OperatorContextChecker;
+import com.ibm.streams.operator.encoding.EncodingFactory;
+import com.ibm.streams.operator.encoding.JSONEncoding;
 import com.ibm.streams.operator.model.InputPortSet;
 import com.ibm.streams.operator.model.InputPortSet.WindowMode;
 import com.ibm.streams.operator.model.InputPortSet.WindowPunctuationInputMode;
@@ -44,7 +48,8 @@ import com.ibm.streams.operator.samples.patterns.TupleConsumer;
 		)
 @InputPorts({
 	@InputPortSet(
-			description="Port that ingests tuples", 
+			description="Each tuple is converted to JSON and sent as a message to the "
+			        + "Slack incoming Webhook. The schema must include a ", 
 			cardinality=1, 
 			optional=false, 
 			windowingMode=WindowMode.NonWindowed, 
@@ -61,15 +66,21 @@ public class SendSlackMessage extends TupleConsumer {
 	// ------------------------------------------------------------------------
 
 	protected static final String DESC_OPERATOR = 
-			"The SendSlackMessage operator outputs the contents of the messageAttribute from "
-		  + "incoming tuples to the Slack WebHook URL specified in the parameters."
+			"Sends messages to a Slack incoming WebHook."
 		  + "\\n"
-		  + "The default messageAttribute is: message. This can be changed through the "
-		  + "messageAttribute parameter."
-		  + "\\n"
-		  + "Custom icons can be used, instead of the default ones, through the "
-		  + "iconUrlAttribute and iconEmojiAttribute parameters."
-		  + "\\n";
+		  + "Each incoming tuple results in a message sent to the incoming Webhook."
+		  + "The tuple is converted to JSON and sent to the incoming Webhook.";
+	
+	@ContextCheck(runtime=false)
+	public static void validateSchema(OperatorContextChecker checker) {
+	    
+	    StreamingInput<?> port = checker.getOperatorContext().getStreamingInputs().get(0);
+	    
+	    if (!checker.checkRequiredAttributes(port, "text"))
+	        return;
+	    checker.checkAttributeType(port.getStreamSchema().getAttribute("text"),
+	            Type.MetaType.RSTRING, Type.MetaType.USTRING);	    
+	}
 	
 	@Parameter(
 			optional=true,
@@ -77,36 +88,6 @@ public class SendSlackMessage extends TupleConsumer {
 			)
 	public void setSlackUrl(String slackUrl) throws IOException {
 		this.slackUrl = slackUrl;
-	}
-	
-	@Parameter(
-			optional=true,
-			description="Incoming tuple attribute that specifies the icon URL for the slack message. "
-					  + "The default icon is specified in the incoming WebHook's configuration."
-			)
-	public void setIconUrlAttribute(TupleAttribute<Tuple, String> iconUrlAttribute) throws IOException {
-		this.iconUrlAttribute = iconUrlAttribute;
-	}
-	
-	@Parameter(
-			optional=true,
-			description="Incoming tuple attribute that specifies the icon emoji for the slack message. "
-					  + "This will be used in-place of the icon URL, if specified. The incoming WebHook's "
-					  + "configuration allows users to choose between an icon or an emoji. If no icon URL or "
-					  + "emoji attributes are found, the default icon in the WebHook's configuration will be used."
-			)
-	public void setIconEmojiAttribute(TupleAttribute<Tuple, String> iconEmojiAttribute) throws IOException {
-		this.iconEmojiAttribute = iconEmojiAttribute;
-	}
-	
-	@DefaultAttribute("message")
-	@Parameter(
-			optional=true,
-			description="Incoming tuple attribute to use as content for the slack message. "
-					  + "The default attribute to use is 'message'."
-			)
-	public void setMessageAttribute(TupleAttribute<Tuple, String> messageAttribute) throws IOException {
-		this.messageAttribute = messageAttribute;
 	}
 	
 	@Parameter(
@@ -132,37 +113,21 @@ public class SendSlackMessage extends TupleConsumer {
 	/**
 	 * Application configuration key names.
 	 */
-	private static final String PARAM_SLACK_URL = "slackUrl",
-								PARAM_MESSAGE_ATTR = "messageAttribute",
-								PARAM_ICON_URL_ATTR = "iconUrlAttribute",
-								PARAM_ICON_EMOJI_ATTR = "iconEmojiAttribute";
+	private static final String PARAM_SLACK_URL = "slackUrl";
 	
 	/**
 	 * Slack incoming WebHook URL.
 	 */
 	private String slackUrl;
-	
-	/**
-	 * Attribute containing icon URL to use for message.
-	 */
-	private TupleAttribute<Tuple, String> iconUrlAttribute;
-	
-	/**
-	 * Attribute containing icon emoji to use for message.
-	 */
-	private TupleAttribute<Tuple, String> iconEmojiAttribute;
-	
-	/**
-	 * Attribute containing message to send.
-	 */
-	private TupleAttribute<Tuple, String> messageAttribute;
-	
+		
 	/**
 	 * Name of application configuration containing operator parameter values.
 	 */
 	private String applicationConfigurationName;
 	
 	private Map<String,String> applicationProperties;
+	 
+	private JSONEncoding<JSONObject, JSONArray> tuple2JSON;
 	
 	/**
 	 * HTTP client and post.
@@ -183,6 +148,8 @@ public class SendSlackMessage extends TupleConsumer {
         updateSlackUrl();
 	
         httpclient = HttpClients.custom().setConnectionTimeToLive(30, TimeUnit.SECONDS).setMaxConnPerRoute(1000).build();
+        
+        tuple2JSON = EncodingFactory.getJSONEncoding();
 	}
 
     /**
@@ -203,24 +170,12 @@ public class SendSlackMessage extends TupleConsumer {
     	
     	// Update slackUrl with the one defined in the application configuration.
     	updateSlackUrl();
-			
-		// Message to post on slack channel.
-    	String message = getMessage(tuple);
     	
-		JSONObject json = new JSONObject();
-		json.put("text", message);
+    	// Simply convert the full tuple to JSON and send that
+    	// as the message.
+    	String msg = tuple2JSON.encodeAsString(tuple);
 		
-		String iconUrl = getIconUrl(tuple);
-		if (iconUrl != null) {
-			json.put("icon_url", iconUrl);
-		}
-		
-		String iconEmoji = getIconEmoji(tuple);
-		if (iconEmoji != null) {
-			json.put("icon_emoji", iconEmoji);
-		}
-		
-		StringEntity params = new StringEntity(json.toString(), "UTF-8");
+		StringEntity params = new StringEntity(msg, "UTF-8");
 		params.setContentType("application/json");
 		httppost.setEntity(params);
 		
@@ -280,48 +235,6 @@ public class SendSlackMessage extends TupleConsumer {
 			throw new Exception(PARAM_SLACK_URL + " can't be found in application configuration or in the operator's parameters.");
 		}
     }
-    
-    /**
-  	 * Retrieve message from incoming tuple. If applicationConfigurationName is specified, use 
-  	 * message attribute specified in application configuration to get message, instead.
-  	 */
-  	private String getMessage(Tuple tuple) {
-        if (applicationProperties.containsKey(PARAM_MESSAGE_ATTR)) {
-            String applicationConfigurationMessage = applicationProperties.get(PARAM_MESSAGE_ATTR);
-            return tuple.getString(applicationConfigurationMessage);
-        }
-		return messageAttribute.getValue(tuple);
-  	}
-	
-    /**
-	 * Retrieve iconUrl from incoming tuple. If applicationConfigurationName is specified, use 
-	 * iconUrl attribute specified in application configuration to get iconUrl, instead.
-	 */
-	private String getIconUrl(Tuple tuple) {
-        if (applicationProperties.containsKey(PARAM_ICON_URL_ATTR)) {
-            String applicationConfigurationIconUrl = applicationProperties.get(PARAM_ICON_URL_ATTR);
-            return tuple.getString(applicationConfigurationIconUrl);
-        }
-		if (iconUrlAttribute != null) {
-			return iconUrlAttribute.getValue(tuple);
-		}
-		return null;
-	}
-	
-    /**
-	 * Retrieve iconEmoji from incoming tuple. If applicationConfigurationName is specified, use 
-	 * iconEmoji attribute specified in application configuration to get iconEmoji, instead.
-	 */
-	private String getIconEmoji(Tuple tuple) {
-        if (applicationProperties.containsKey(PARAM_ICON_EMOJI_ATTR)) {
-            String applicationConfigurationIconEmoji = applicationProperties.get(PARAM_ICON_EMOJI_ATTR);
-            return tuple.getString(applicationConfigurationIconEmoji);
-        }
-        if (iconEmojiAttribute != null) {
-			return iconEmojiAttribute.getValue(tuple);
-		}
-		return null;
-	}
     
 	/**
 	 * Calls the ProcessingElement.getApplicationConfiguration() method to
