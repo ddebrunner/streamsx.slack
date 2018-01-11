@@ -15,3 +15,8 @@ type Message = tuple<rstring text>;
  * specify the emoji of the message.
  */
 type EmojiMessage = Message, tuple<rstring icon_emoji>;
+
+/**
+ * Standard JSON schema.
+*/
+type Json = tuple<rstring jsonString>;
