@@ -37,7 +37,7 @@ use com.ibm.streamsx.topology.topic::Subscribe ;
  * @param applicationConfigurationName Name of the application configuration containing the `slackUrl` property. Defaults to the submission time parameter `applicationConfigurationName` which in turn defaults to `slackConfiguration`.
  * @param topic Topic name service subscribes.  Defaults to the submission time parameter `topic` which in turn defaults to `streamsx/slack/messages`.
  */
-public composite SlackService
+public composite SlackMessageService
 {
 	param
 		expression<rstring> $applicationConfigurationName : getSubmissionTimeValue("applicationConfigurationName", "slackConfiguration");
