@@ -4,22 +4,29 @@
 // ****************************************************************************
 //
 
-namespace com.ibm.streamsx.slack.service;
+namespace com.ibm.streamsx.slack.services;
 
+use com.ibm.streamsx.json::toJSON;
 use com.ibm.streamsx.slack::SendSlackMessage ;
 use com.ibm.streamsx.slack::Json ;
+use com.ibm.streamsx.topology::String ;
 use com.ibm.streamsx.topology.topic::Subscribe ;
 
 /**
  * Microservice sending messages to a Slack incoming webhook.
  *
- * Subscribes to a JSON topic and sends each JSON tuple as-is
+ * Subscribes to `Json` topic and sends each JSON tuple as-is
  * as the request body to the webhook. Any application can
  * thus send messages to the Slack webhook by publishing a JSON
  * message to the topic this microservice is subscribing to.
  *
  * The JSON can have any properties accepted by the webhook
  * minimally having `text` property defining the text of the message.
+ *
+ * Additionally the topic with type `String` is subscribed to allowing
+ * applications to publish simple text messages using the `String` schema.
+ * Each tuple is converted to a JSON object for the webhook with
+ * a single property `text` with the value of the tuple.
  *
  * Slack incoming webhooks are described here:  [https://api.slack.com/incoming-webhooks]
  *
@@ -34,13 +41,13 @@ use com.ibm.streamsx.topology.topic::Subscribe ;
  * a Streams application configuration. The name of the application
  * configuration is set by the submission time parameter `applicationConfigurationName` defaulting to `slackConfiguration`.
  *
- * @param applicationConfigurationName Name of the application configuration containing the `slackUrl` property. Defaults to the submission time parameter `applicationConfigurationName` which in turn defaults to `slackConfiguration`.
+ * @param  slack Name of the application configuration containing the `slackUrl` property. Defaults to the submission time parameter `slack` which in turn defaults to `slack`.
  * @param topic Topic name service subscribes.  Defaults to the submission time parameter `topic` which in turn defaults to `streamsx/slack/messages`.
  */
-public composite SlackService
+public composite SlackMessageService
 {
 	param
-		expression<rstring> $applicationConfigurationName : getSubmissionTimeValue("applicationConfigurationName", "slackConfiguration");
+		expression<rstring> $slack : getSubmissionTimeValue("slack", "slack");
 		expression<rstring> $topic : getSubmissionTimeValue("topic", "streamsx/slack/messages");
 		
 	graph
@@ -53,14 +60,25 @@ public composite SlackService
 				topic : $topic ;
 				streamType : Json ;
 		}
+
+                stream<String> TextMessages = Subscribe()
+		{
+			param
+				topic : $topic ;
+				streamType : String ;
+		}
+                stream<Json> TextAsJson = Functor(TextMessages) {
+                  output TextAsJson:
+                      jsonString = toJSON('text', string);
+                }
 		
 		/**
 		 * The SendSlackMessage sends the message attribute's content to the Slack 
 		 * URL specified in the application configuration.
 		 */
-		() as SendMessage = SendSlackMessage(JsonMessages)
+		() as SendMessage = SendSlackMessage(JsonMessages, TextAsJson)
 		{
 			param
-				applicationConfigurationName : $applicationConfigurationName ;
+				applicationConfigurationName : $slack ;
 		}
 }
